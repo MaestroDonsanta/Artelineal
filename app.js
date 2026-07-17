@@ -814,16 +814,6 @@ function downloadArtwork() {
                     || (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
       const isIframe = window.self !== window.top;
 
-      // Mostrar u ocultar la pista de "Mantener presionado"
-      const tapHint = document.getElementById("preview-tap-hint");
-      if (tapHint) {
-        if (isMobile) {
-          tapHint.style.display = "block";
-        } else {
-          tapHint.style.display = "none";
-        }
-      }
-
       // Personalizar el mensaje de instrucciones y visibilidad de botones según el entorno
       const mobileInstructionEl = document.getElementById("mobile-instruction");
       const shareBtn = document.getElementById("btn-modal-share");
@@ -846,12 +836,12 @@ function downloadArtwork() {
           if (shareBtn) shareBtn.classList.add("hidden");
           if (downloadBtn) downloadBtn.classList.add("hidden");
           if (mobileInstructionEl) {
-            mobileInstructionEl.innerHTML = `<strong>⚠️ Restricción de sitio integrado:</strong> Las descargas automáticas están bloqueadas por seguridad en esta página.<br><br>Para guardar tu mandala, <strong>mantén presionada la imagen arriba</strong> y selecciona <strong>"Guardar en Fotos"</strong> o <strong>"Compartir"</strong>.`;
+            mobileInstructionEl.innerHTML = `<strong>⚠️ Restricción de sitio integrado:</strong> Las descargas automáticas están bloqueadas por seguridad en esta página.`;
             mobileInstructionEl.style.borderLeftColor = "var(--danger-color)";
             mobileInstructionEl.style.display = "block";
           }
         } else {
-          // Móvil directo (fuera de iframe) - share nativo y long-press recomendados
+          // Móvil directo (fuera de iframe) - share nativo y descarga
           if (shareBtn && canShareFiles) {
             shareBtn.classList.remove("hidden");
           } else if (shareBtn) {
@@ -859,7 +849,7 @@ function downloadArtwork() {
           }
           if (downloadBtn) downloadBtn.classList.remove("hidden");
           if (mobileInstructionEl) {
-            mobileInstructionEl.innerHTML = `En móviles, puedes pulsar <strong>"Guardar en tu Dispositivo"</strong> para abrir el menú de compartir, o <strong>mantener presionada la imagen arriba</strong> para guardarla directamente en tus fotos.`;
+            mobileInstructionEl.innerHTML = `En móviles, puedes pulsar <strong>"Guardar en tu Dispositivo"</strong> para abrir el menú de guardado/compartir.`;
             mobileInstructionEl.style.borderLeftColor = "var(--accent-color)";
             mobileInstructionEl.style.display = "block";
           }

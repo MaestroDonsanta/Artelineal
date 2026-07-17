@@ -858,32 +858,6 @@ body {
   display: block;
 }
 
-.preview-tap-hint {
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: rgba(11, 15, 25, 0.85);
-  color: var(--text-primary);
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border: 1px solid var(--border-color);
-  pointer-events: none;
-  white-space: nowrap;
-  opacity: 0.9;
-  box-shadow: var(--shadow-md);
-  display: none;
-  animation: pulseHint 2s infinite ease-in-out;
-}
-
-@keyframes pulseHint {
-  0% { transform: translate(-50%, 0) scale(1); opacity: 0.9; }
-  50% { transform: translate(-50%, -3px) scale(1.03); opacity: 1; box-shadow: 0 0 10px rgba(83, 109, 254, 0.4); }
-  100% { transform: translate(-50%, 0) scale(1); opacity: 0.9; }
-}
-
 .modal-instructions {
   text-align: center;
   color: var(--text-secondary);
