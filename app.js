@@ -4,6 +4,11 @@ let colorCanvas, colorCtx; // Canvas oculto con colores sólidos
 let originalImage = new Image(); // Imagen original cargada
 let originalImgData = null; // Datos de píxeles de la imagen original (para bordes)
 
+// Estado para descarga y compartir
+let lastGeneratedBlob = null;
+let lastGeneratedDataURL = "";
+let lastGeneratedFileName = "";
+
 // Estado de la aplicación
 let activeColor = "#536DFE"; // Color por defecto
 let activeMode = "paint"; // "paint" o "pan"
@@ -481,6 +486,21 @@ function setupEventListeners() {
   safeAddListener("btn-download", "click", downloadArtwork);
   safeAddListener("btn-toolbar-download", "click", downloadArtwork);
 
+  // Eventos del Modal de Descarga
+  safeAddListener("modal-close", "click", closeDownloadModal);
+  safeAddListener("btn-modal-share", "click", shareArtwork);
+  safeAddListener("btn-modal-download", "click", triggerFileDownload);
+
+  // Cerrar el modal al hacer clic fuera del contenedor
+  const modalOverlay = document.getElementById("download-modal");
+  if (modalOverlay) {
+    modalOverlay.addEventListener("click", (e) => {
+      if (e.target === modalOverlay) {
+        closeDownloadModal();
+      }
+    });
+  }
+
   // Redimensionado de Ventana (solo recalcula límites, no reinicia vista)
   window.addEventListener("resize", handleResize);
 
@@ -754,6 +774,7 @@ function resetCanvas() {
 }
 
 // --- DESCARGAR ARTE ---
+// --- DESCARGAR ARTE ---
 function downloadArtwork() {
   try {
     showLoading(true);
@@ -772,21 +793,162 @@ function downloadArtwork() {
     downloadCtx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
     downloadCtx.globalCompositeOperation = "source-over";
 
-    // 3. Generar descarga
-    const dataURL = downloadCanvas.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.download = `Mandala_Coloreado_${Date.now()}.png`;
-    link.href = dataURL;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // 3. Guardar nombre de archivo
+    lastGeneratedFileName = `Mandala_Coloreado_${Date.now()}.png`;
 
-    showLoading(false);
-    showToast("¡Obra de arte descargada con éxito!");
+    // 4. Generar URL de datos
+    lastGeneratedDataURL = downloadCanvas.toDataURL("image/png");
+    
+    // 5. Convertir a Blob para compartir si es necesario
+    downloadCanvas.toBlob((blob) => {
+      lastGeneratedBlob = blob;
+      
+      // Cargar vista previa en el modal
+      const previewImg = document.getElementById("download-preview");
+      if (previewImg) {
+        previewImg.src = lastGeneratedDataURL;
+      }
+
+      // Detectar dispositivo móvil e iframe
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                    || (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+      const isIframe = window.self !== window.top;
+
+      // Mostrar u ocultar la pista de "Mantener presionado"
+      const tapHint = document.getElementById("preview-tap-hint");
+      if (tapHint) {
+        if (isMobile) {
+          tapHint.style.display = "block";
+        } else {
+          tapHint.style.display = "none";
+        }
+      }
+
+      // Personalizar el mensaje de instrucciones y visibilidad de botones según el entorno
+      const mobileInstructionEl = document.getElementById("mobile-instruction");
+      const shareBtn = document.getElementById("btn-modal-share");
+      const downloadBtn = document.getElementById("btn-modal-download");
+
+      // Verificar si la API web share existe y soporta compartir archivos
+      const canShareFiles = navigator.share && navigator.canShare && lastGeneratedBlob && (() => {
+        try {
+          const dummyFile = new File([lastGeneratedBlob], lastGeneratedFileName, { type: "image/png" });
+          return navigator.canShare({ files: [dummyFile] });
+        } catch (e) {
+          return false;
+        }
+      })();
+
+      if (isMobile) {
+        if (isIframe) {
+          // Dentro de un iframe en móvil, las descargas y el share nativo fallan.
+          // Ocultamos los botones inútiles para evitar confusión y mostramos la advertencia clara.
+          if (shareBtn) shareBtn.classList.add("hidden");
+          if (downloadBtn) downloadBtn.classList.add("hidden");
+          if (mobileInstructionEl) {
+            mobileInstructionEl.innerHTML = `<strong>⚠️ Restricción de sitio integrado:</strong> Las descargas automáticas están bloqueadas por seguridad en esta página.<br><br>Para guardar tu mandala, <strong>mantén presionada la imagen arriba</strong> y selecciona <strong>"Guardar en Fotos"</strong> o <strong>"Compartir"</strong>.`;
+            mobileInstructionEl.style.borderLeftColor = "var(--danger-color)";
+            mobileInstructionEl.style.display = "block";
+          }
+        } else {
+          // Móvil directo (fuera de iframe) - share nativo y long-press recomendados
+          if (shareBtn && canShareFiles) {
+            shareBtn.classList.remove("hidden");
+          } else if (shareBtn) {
+            shareBtn.classList.add("hidden");
+          }
+          if (downloadBtn) downloadBtn.classList.remove("hidden");
+          if (mobileInstructionEl) {
+            mobileInstructionEl.innerHTML = `En móviles, puedes pulsar <strong>"Guardar en tu Dispositivo"</strong> para abrir el menú de compartir, o <strong>mantener presionada la imagen arriba</strong> para guardarla directamente en tus fotos.`;
+            mobileInstructionEl.style.borderLeftColor = "var(--accent-color)";
+            mobileInstructionEl.style.display = "block";
+          }
+        }
+      } else {
+        // Computadora de escritorio: ocultar botón de compartir (salvo soporte nativo) y mostrar descarga clásica
+        if (shareBtn && canShareFiles) {
+          shareBtn.classList.remove("hidden");
+        } else if (shareBtn) {
+          shareBtn.classList.add("hidden");
+        }
+        if (downloadBtn) downloadBtn.classList.remove("hidden");
+        if (mobileInstructionEl) {
+          mobileInstructionEl.style.display = "none";
+        }
+      }
+      
+      // Mostrar el modal
+      const modal = document.getElementById("download-modal");
+      if (modal) {
+        modal.classList.add("active");
+        modal.setAttribute("aria-hidden", "false");
+      }
+      
+      showLoading(false);
+    }, "image/png");
+
   } catch (error) {
     showLoading(false);
     console.error("Error al exportar la imagen: ", error);
     showToast("Error al descargar el mandala.", "danger");
+  }
+}
+
+// --- CERRAR MODAL DE DESCARGA ---
+function closeDownloadModal() {
+  const modal = document.getElementById("download-modal");
+  if (modal) {
+    modal.classList.remove("active");
+    modal.setAttribute("aria-hidden", "true");
+  }
+}
+
+// --- COMPARTIR / GUARDAR EN DISPOSITIVO MÓVIL ---
+async function shareArtwork() {
+  if (!lastGeneratedBlob) {
+    showToast("No hay imagen generada para compartir.", "danger");
+    return;
+  }
+  
+  try {
+    const file = new File([lastGeneratedBlob], lastGeneratedFileName, { type: "image/png" });
+    
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: "Mandala Coloreado",
+        text: "¡Mira el mandala que acabo de colorear en la aplicación de Arte Lineal!"
+      });
+      showToast("¡Imagen compartida o guardada!");
+    } else {
+      showToast("Tu navegador no admite compartir archivos nativos.", "danger");
+    }
+  } catch (error) {
+    console.error("Error al compartir: ", error);
+    if (error.name !== "AbortError") {
+      showToast("No se pudo completar la acción de compartir.", "danger");
+    }
+  }
+}
+
+// --- DESCARGAR ARCHIVO LOCALMENTE ---
+function triggerFileDownload() {
+  if (!lastGeneratedDataURL) {
+    showToast("No hay imagen disponible para descargar.", "danger");
+    return;
+  }
+  
+  try {
+    const link = document.createElement("a");
+    link.download = lastGeneratedFileName;
+    link.href = lastGeneratedDataURL;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast("Descarga iniciada.");
+  } catch (error) {
+    console.error("Error al descargar archivo: ", error);
+    showToast("Error al descargar archivo.", "danger");
   }
 }
 
