@@ -44,8 +44,9 @@ const MANDALAS = window.MANDALAS_DATA || [
 
 // Helper para resolver la ruta de la imagen (evita codificar si ya es base64 data URL)
 function resolveImageSrc(file) {
+  if (!file) return "";
   if (file.startsWith("data:")) return file;
-  return encodeURIComponent(file);
+  return encodeURI(file);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -71,6 +72,7 @@ function initApp() {
 // --- CONFIGURACIÓN DE GALERÍA ---
 function setupGallery() {
   const galleryGrid = document.getElementById("gallery-grid");
+  if (!galleryGrid) return;
   galleryGrid.innerHTML = "";
 
   MANDALAS.forEach((m, index) => {
@@ -80,7 +82,7 @@ function setupGallery() {
     item.title = m.name;
 
     const img = document.createElement("img");
-    img.src = resolveImageSrc(m.file); // Evita problemas con espacios o carga base64
+    img.src = resolveImageSrc(m.file);
     img.alt = m.name;
     img.loading = "lazy";
 
@@ -108,69 +110,83 @@ function loadMandala(fileName) {
   showLoading(true);
   
   originalImage = new Image();
+  originalImage.crossOrigin = "anonymous";
+  
   originalImage.onload = () => {
-    // Dimensionar canvases según la imagen original, con un tope máximo para evitar crashes de GPU en iOS
-    const MAX_CANVAS_DIM = 1600;
-    let w = originalImage.naturalWidth || originalImage.width || 1200;
-    let h = originalImage.naturalHeight || originalImage.height || 1200;
+    try {
+      // Dimensionar canvases según la imagen original, con un tope máximo para evitar crashes de GPU en iOS
+      const MAX_CANVAS_DIM = 1600;
+      let w = originalImage.naturalWidth || originalImage.width || 1200;
+      let h = originalImage.naturalHeight || originalImage.height || 1200;
 
-    if (w > MAX_CANVAS_DIM || h > MAX_CANVAS_DIM) {
-      const aspectRatio = w / h;
-      if (w > h) {
-        w = MAX_CANVAS_DIM;
-        h = Math.round(MAX_CANVAS_DIM / aspectRatio);
-      } else {
-        h = MAX_CANVAS_DIM;
-        w = Math.round(MAX_CANVAS_DIM * aspectRatio);
+      if (w > MAX_CANVAS_DIM || h > MAX_CANVAS_DIM) {
+        const aspectRatio = w / h;
+        if (w > h) {
+          w = MAX_CANVAS_DIM;
+          h = Math.round(MAX_CANVAS_DIM / aspectRatio);
+        } else {
+          h = MAX_CANVAS_DIM;
+          w = Math.round(MAX_CANVAS_DIM * aspectRatio);
+        }
       }
+
+      canvas.width = w;
+      canvas.height = h;
+      
+      colorCanvas.width = w;
+      colorCanvas.height = h;
+
+      // Ajustar el tamaño del wrapper para que coincida exactamente con las dimensiones del canvas
+      const canvasWrapper = document.getElementById("canvas-wrapper");
+      if (canvasWrapper) {
+        canvasWrapper.style.width = canvas.width + "px";
+        canvasWrapper.style.height = canvas.height + "px";
+      }
+
+      // Inicializar lienzo de colores con fondo blanco
+      colorCtx.fillStyle = "#FFFFFF";
+      colorCtx.fillRect(0, 0, colorCanvas.width, colorCanvas.height);
+
+      // Obtener los datos de píxeles de la plantilla original
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext("2d");
+      tempCtx.drawImage(originalImage, 0, 0, tempCanvas.width, tempCanvas.height);
+      
+      try {
+        originalImgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+      } catch (secErr) {
+        console.warn("No se pudo obtener ImageData directamente (posible CORS en file:// local):", secErr);
+      }
+
+      // Resetear transformaciones de vista
+      resetView();
+
+      // Resetear historial
+      historyStack = [];
+      historyIndex = -1;
+      saveHistoryState();
+
+      // Dibujar lienzo visible
+      renderCanvas();
+      showToast("Mandala cargado. ¡A colorear!");
+    } catch (err) {
+      console.error("Error al procesar mandala:", err);
+      showToast("Error al procesar el mandala.", "danger");
+    } finally {
+      showLoading(false);
     }
-
-    canvas.width = w;
-    canvas.height = h;
-    
-    colorCanvas.width = w;
-    colorCanvas.height = h;
-
-    // Ajustar el tamaño del wrapper para que coincida exactamente con las dimensiones del canvas
-    const canvasWrapper = document.getElementById("canvas-wrapper");
-    if (canvasWrapper) {
-      canvasWrapper.style.width = canvas.width + "px";
-      canvasWrapper.style.height = canvas.height + "px";
-    }
-
-    // Inicializar lienzo de colores con fondo blanco
-    colorCtx.fillStyle = "#FFFFFF";
-    colorCtx.fillRect(0, 0, colorCanvas.width, colorCanvas.height);
-
-    // Obtener los datos de píxeles de la plantilla original
-    // Creamos un canvas temporal para extraer los píxeles originales sin modificar
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = canvas.width;
-    tempCanvas.height = canvas.height;
-    const tempCtx = tempCanvas.getContext("2d");
-    tempCtx.drawImage(originalImage, 0, 0, tempCanvas.width, tempCanvas.height);
-    originalImgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-
-    // Resetear transformaciones de vista
-    resetView();
-
-    // Resetear historial
-    historyStack = [];
-    historyIndex = -1;
-    saveHistoryState();
-
-    // Dibujar lienzo visible
-    renderCanvas();
-    showLoading(false);
-    showToast("Mandala cargado. ¡A colorear!");
   };
 
-  originalImage.onerror = () => {
+  originalImage.onerror = (e) => {
+    console.error("Error al cargar la imagen:", fileName, e);
     showLoading(false);
-    showToast("Error al cargar el mandala.", "danger");
+    showToast("No se encontró el archivo de imagen: " + fileName, "danger");
   };
 
   originalImage.src = resolveImageSrc(fileName);
+}c(fileName);
 }
 
 // --- DIBUJAR LIENZO (COMPOSICIÓN MULTIPLY) ---
