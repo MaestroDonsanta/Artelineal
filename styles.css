@@ -107,39 +107,13 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  text-decoration: none;
-  color: inherit;
-  cursor: pointer;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
   user-select: none;
-}
-
-.brand:hover {
-  transform: translateY(-1px) scale(1.02);
-  opacity: 0.95;
-}
-
-.brand:active {
-  transform: translateY(0) scale(0.99);
 }
 
 .brand-logo {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: filter 0.3s ease, transform 0.3s ease;
-}
-
-.brand:hover .brand-logo {
-  filter: drop-shadow(0 0 10px rgba(165, 180, 252, 0.7));
-}
-
-.brand-logo svg {
-  width: 26px;
-  height: 26px;
-  stroke: #A5B4FC;
-  fill: none;
-  animation: rotateLogo 12s linear infinite;
 }
 
 .brand-logo-img {
@@ -148,9 +122,43 @@ body {
   object-fit: contain;
 }
 
-@keyframes rotateLogo {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+/* Don Santa Logo Link in Header */
+.author-brand-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 0.3rem 0.65rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.author-brand-link:hover {
+  transform: translateY(-1px) scale(1.03);
+  background: rgba(83, 109, 254, 0.12);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 12px rgba(83, 109, 254, 0.35);
+}
+
+.author-brand-link:active {
+  transform: scale(0.98);
+}
+
+.author-logo-img {
+  height: 30px;
+  width: auto;
+  max-width: 140px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  opacity: 0.92;
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.author-brand-link:hover .author-logo-img {
+  opacity: 1;
+  filter: brightness(0) invert(1) drop-shadow(0 0 4px rgba(165, 180, 252, 0.8));
 }
 
 .brand-text h1 {
@@ -692,6 +700,14 @@ body {
   }
   .brand-text p {
     font-size: 0.7rem;
+  }
+  .author-brand-link {
+    padding: 0.2rem 0.45rem;
+    border-radius: 14px;
+  }
+  .author-logo-img {
+    height: 22px;
+    max-width: 95px;
   }
 
   .app-bottom-panel {
