@@ -244,12 +244,18 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 #coloring-canvas {
   display: block;
   width: 100%;
   height: 100%;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 /* Canvas HUD Overlay */
@@ -1383,7 +1389,6 @@ function loadMandala(fileName) {
   };
 
   originalImage.src = resolveImageSrc(fileName);
-}c(fileName);
 }
 
 // --- DIBUJAR LIENZO (COMPOSICIÓN MULTIPLY) ---
@@ -1404,18 +1409,39 @@ function renderCanvas() {
 
 // --- ALGORITMO FLOOD-FILL (RELLENO DE CUBETA) ---
 function performFloodFill(startX, startY, fillColorHex) {
+  if (!colorCanvas || !canvas) return;
   const width = colorCanvas.width;
   const height = colorCanvas.height;
+  if (width <= 0 || height <= 0) return;
 
   // Convertir hex de color de relleno a RGBA
   const fillRGBA = hexToRgba(fillColorHex);
 
   // Leer píxeles del lienzo de colores
-  const colorImgData = colorCtx.getImageData(0, 0, width, height);
+  let colorImgData;
+  try {
+    colorImgData = colorCtx.getImageData(0, 0, width, height);
+  } catch (err) {
+    console.error("Error al acceder a los datos de color:", err);
+    return;
+  }
   const colorData = colorImgData.data;
 
   // Datos de la plantilla original (para verificar bordes/líneas negras)
-  const origData = originalImgData.data;
+  let origData = originalImgData ? originalImgData.data : null;
+  if (!origData) {
+    try {
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const tempCtx = tempCanvas.getContext("2d");
+      tempCtx.drawImage(originalImage, 0, 0, width, height);
+      originalImgData = tempCtx.getImageData(0, 0, width, height);
+      origData = originalImgData.data;
+    } catch (e) {
+      origData = colorData;
+    }
+  }
 
   // Obtener color del píxel clickeado en la capa de color
   const startIdx = (startY * width + startX) * 4;
@@ -1748,47 +1774,124 @@ function setupEventListeners() {
     });
   }
 
-  // --- NAVEGACIÓN Y COLOREADO EN EL CANVAS ---
+  // --- NAVEGACIÓN Y COLOREADO EN EL CANVAS CON SOPORTE MULTITÁCTIL ---
+  const activePointers = new Map();
+  let initialPinchDistance = 0;
+  let initialPinchZoom = 1;
+  let initialPinchPan = { x: 0, y: 0 };
+  let initialPinchCenter = { x: 0, y: 0 };
+  let pointerStartPos = { x: 0, y: 0 };
+  let pointerStartTime = 0;
+  let hasPointerMoved = false;
 
   if (viewport) {
-    // Evento Clic / Touch en el viewport para Pintar o Mover
     viewport.addEventListener("pointerdown", (e) => {
-      // Si el clic fue en un botón de la barra de herramientas, ignorarlo
-      if (e.target.closest("#toolbar")) return;
+      // Ignorar si el toque ocurre en la barra de herramientas o modales
+      if (e.target.closest("#toolbar") || e.target.closest(".modal-container")) return;
 
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      
-      const x = Math.floor((e.clientX - rect.left) * scaleX);
-      const y = Math.floor((e.clientY - rect.top) * scaleY);
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-      if (activeMode === "paint") {
-        if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
-          performFloodFill(x, y, activeColor);
+      if (activePointers.size === 1) {
+        pointerStartPos = { x: e.clientX, y: e.clientY };
+        pointerStartTime = Date.now();
+        hasPointerMoved = false;
+
+        if (activeMode === "pan") {
+          isDragging = true;
+          viewport.style.cursor = "grabbing";
+          dragStartX = e.clientX - panX;
+          dragStartY = e.clientY - panY;
         }
-      } else if (activeMode === "picker") {
-        if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
-          const pixel = colorCtx.getImageData(x, y, 1, 1).data;
-          const r = pixel[0];
-          const g = pixel[1];
-          const b = pixel[2];
-          const a = pixel[3];
-          let hex = "#FFFFFF";
-          if (a > 0) {
-            hex = rgbToHex(r, g, b);
-          }
-          setActiveColor(hex);
-          setMode("paint");
-          showToast("Color copiado!");
-        }
-      } else if (activeMode === "pan") {
-        isDragging = true;
-        viewport.style.cursor = "grabbing";
-        dragStartX = e.clientX - panX;
-        dragStartY = e.clientY - panY;
+      } else if (activePointers.size === 2) {
+        // Iniciar gesto de pellizco (Pinch to zoom / 2-finger pan)
+        isDragging = false;
+        hasPointerMoved = true; // Prevenir coloreado al soltar los dedos
+        const pts = Array.from(activePointers.values());
+        initialPinchDistance = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        initialPinchZoom = zoom;
+        initialPinchPan = { x: panX, y: panY };
+        initialPinchCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
       }
     });
+
+    window.addEventListener("pointermove", (e) => {
+      if (!activePointers.has(e.pointerId)) return;
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (activePointers.size === 1) {
+        const dist = Math.hypot(e.clientX - pointerStartPos.x, e.clientY - pointerStartPos.y);
+        if (dist > 8) {
+          hasPointerMoved = true;
+        }
+
+        if (isDragging && activeMode === "pan") {
+          panX = e.clientX - dragStartX;
+          panY = e.clientY - dragStartY;
+          updateTransform();
+        }
+      } else if (activePointers.size === 2) {
+        const pts = Array.from(activePointers.values());
+        const currentDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        const currentCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+
+        // Zoom proporcional al cambio de distancia entre los dos dedos
+        const scaleChange = currentDist / initialPinchDistance;
+        zoom = Math.min(Math.max(initialPinchZoom * scaleChange, minZoom), maxZoom);
+
+        // Paneo proporcional al movimiento del centro de los dedos
+        panX = initialPinchPan.x + (currentCenter.x - initialPinchCenter.x);
+        panY = initialPinchPan.y + (currentCenter.y - initialPinchCenter.y);
+        updateTransform();
+      }
+    });
+
+    const handlePointerEnd = (e) => {
+      if (activePointers.has(e.pointerId)) {
+        // Si fue un tap único con 1 dedo sin desplazamiento significativo
+        if (activePointers.size === 1 && !hasPointerMoved && (Date.now() - pointerStartTime < 600)) {
+          const rect = canvas.getBoundingClientRect();
+          const scaleX = canvas.width / rect.width;
+          const scaleY = canvas.height / rect.height;
+          
+          const x = Math.floor((e.clientX - rect.left) * scaleX);
+          const y = Math.floor((e.clientY - rect.top) * scaleY);
+
+          if (activeMode === "paint") {
+            if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
+              performFloodFill(x, y, activeColor);
+            }
+          } else if (activeMode === "picker") {
+            if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
+              const pixel = colorCtx.getImageData(x, y, 1, 1).data;
+              const r = pixel[0];
+              const g = pixel[1];
+              const b = pixel[2];
+              const a = pixel[3];
+              let hex = "#FFFFFF";
+              if (a > 0) {
+                hex = rgbToHex(r, g, b);
+              }
+              setActiveColor(hex);
+              setMode("paint");
+              showToast("Color copiado!");
+            }
+          }
+        }
+        activePointers.delete(e.pointerId);
+      }
+
+      if (activePointers.size === 0) {
+        isDragging = false;
+        if (activeMode === "pan" && viewport) {
+          viewport.style.cursor = "grab";
+        }
+      } else if (activePointers.size === 1) {
+        hasPointerMoved = true; // Si queda 1 dedo tras pellizcar, no pintar
+      }
+    };
+
+    window.addEventListener("pointerup", handlePointerEnd);
+    window.addEventListener("pointercancel", handlePointerEnd);
 
     // Zoom con rueda del mouse (estable desde el centro)
     viewport.addEventListener("wheel", (e) => {
@@ -1802,23 +1905,6 @@ function setupEventListeners() {
       updateTransform();
     }, { passive: false });
   }
-
-  window.addEventListener("pointermove", (e) => {
-    if (isDragging && activeMode === "pan") {
-      panX = e.clientX - dragStartX;
-      panY = e.clientY - dragStartY;
-      updateTransform();
-    }
-  });
-
-  window.addEventListener("pointerup", () => {
-    if (isDragging) {
-      isDragging = false;
-      if (activeMode === "pan" && viewport) {
-        viewport.style.cursor = "grab";
-      }
-    }
-  });
 
   // Atajos de teclado útiles
   document.addEventListener("keydown", (e) => {
